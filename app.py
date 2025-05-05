@@ -24,50 +24,95 @@ page = st.sidebar.radio("Navigation", ["Home", "Markov", "Hidden Markov", "Queue
 # ──────────────────────────────────────────────────────────────────────────
 # 3  Home tab
 # ──────────────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------
+# Home page
+# ------------------------------------------------------------
 if page == "Home":
+    import matplotlib.pyplot as plt
+
+    # ──────────────────────────────────────────────────────────
+    # Title & Subtitle
+    # ──────────────────────────────────────────────────────────
     st.title("Stochastic Processes Project: Modeling GPU Resource Utilization")
+    st.caption("Markov Chains · Hidden Markov Models · Queueing Theory")
 
-    st.write("""
-    Welcome to this data-driven exploration of the MIT SuperCloud Datacenter Challenge dataset!
+    # ──────────────────────────────────────────────────────────
+    # Welcome Narrative (README‑style)
+    # ──────────────────────────────────────────────────────────
+    st.markdown(
+        """
+### 👋 Welcome
+This app documents our journey applying **stochastic‑process models** to a **2 TB GPU workload dataset** released by the [MIT SuperCloud Datacenter Challenge](https://supercloud.mit.edu/).  
+We focus on three lenses:
 
-    This project represents a journey that started with identifying an idea: 
-    applying stochastic process models (Markov Chains, Hidden Markov Models, and Queueing Theory) 
-    to analyze real-world datacenter workloads, focusing on **GPU resource utilization**.
+* **Markov Chains** — state transitions of GPU utilisation  
+* **Hidden Markov Models (HMMs)** — latent workload regimes  
+* **Queueing Theory** — arrival / service dynamics of SLURM jobs  
 
-    We initially faced the challenge of acquiring an appropriate dataset. After exploring multiple sources, 
-    we secured access to a **2TB dataset hosted publicly on AWS S3 by MIT SuperCloud**. Using the AWS CLI with 
-    `--no-sign-request`, we navigated the massive folder structure to locate relevant data.
+---
 
-    Through careful examination, we identified:
-    - **cpu/** and **gpu/** directories
-    - Nested folders (0000/ to 0099/) containing job files
-    - Paired files: `*-summary.csv` and `*-timeseries.csv` for each job
+### 📂 Dataset at a Glance
+| Layer | Details |
+|-------|---------|
+| Root  | `cpu/` and `gpu/` |
+| Sub‑folders | `0000/ … 0099/` (job shards) |
+| Per‑job files | `*-summary.csv` + `*-timeseries.csv` |
+| Total size | **≈ 2 TB** (public AWS S3 bucket) |
 
-    Given the dataset size, we worked with a **small representative sample extracted from 2TB of data**, 
-    manually inspecting the schema, structure, and content.
+We analysed a **representative GPU sample** to keep local storage humane.
 
-    The dataset features included:
-    - Timestamps (submission, eligibility, start, end)
-    - Resource requests (CPUs, memory, nodes)
-    - Job metadata (user ID, job type, constraints)
-    - Resource metrics (CPU utilization, RSS, VMSize, I/O metrics)
+*Dataset link →* **`s3://mit-ll-supercloud-dc/data/`**
 
-    One key challenge was understanding **which features mapped to observable vs hidden states**. 
-    SLURM logs record job status codes, but no explicit state transitions suitable for Markov models. 
-    We deliberated between using scheduler states, resource utilization thresholds, or derived state classifications.
+---
 
-    Ultimately, we converged on a solution to:
-    - **Discretize continuous metrics (like CPUUtilization)** into meaningful state categories (Idle, Normal, Busy)
-    - Use these derived states to build **transition matrices** for Markov models
-    - Leverage job lifecycle timestamps for **queueing theory modeling** (arrival rates, wait times, service times)
+### 🔑 Extracted Features
+* **Resource metrics**: `CPUUtilization`, `RSS`, `VMSize`, `IORead`, `IOWrite`, `Threads`, `ElapsedTime`  
+* **Job metadata**: `time_submit`, `time_start`, `time_end`, `state`, `cpus_req`, `mem_req`, `partition`
 
-    This project reflects iterative exploration, problem-solving, and hands-on data engineering 
-    to bridge the gap between raw log files and stochastic process applications.
+---
 
-    Explore the tabs in the sidebar to view:
-    - Markov Chain modeling
-    - Hidden Markov Model state inference
-    - Queueing system analysis
+### 🏗️ Challenges & Solutions
+| Pain‑point | What we did |
+|------------|-------------|
+| **2 TB size** | `aws s3 cp --no-sign-request --recursive …` on only **gpu/** shards |
+| **Undocumented states** | Combined SLURM codes + utilisation thresholds ➜ Idle / Normal / Busy |
+| **Sparse symbols** | Emission matrices handle missing observations |
+| **Validation** | Cross‑checked steady‑state vectors with domain intuition |
+
+---
+
+### 🚀 Quick‑Start
+
+```bash
+git clone https://github.com/yourusername/stocastiq.git
+cd stocastiq
+pip install -r requirements.txt
+streamlit run app.py         # loads a bundled sample file
+```
+## 🔗 Live Repository
+
+Browse the complete project source on GitHub:  
+**<https://github.com/ZainabEman/MIT_supercloud-stochastic-analytics.git>**
+
+---
+
+## 📦 Dataset Access
+
+- **Public AWS S3 bucket** (raw files, ≈ 2 TB):  
+  `s3://mit-ll-supercloud-dc/`
+
+- **Dataset landing page / paper** (overview & citation):  
+  <https://arxiv.org/abs/2106.09701>
+
+---
+
+## 🎓 Acknowledgments
+
+- **MIT SuperCloud Datacenter Challenge** team for releasing the large‑scale workload dataset  
+- **SLURM** scheduler documentation and community contributors for elucidating job‑state codes  
+- Open‑source maintainers of **hmmlearn**, **streamlit**, and **matplotlib** for the libraries powering our analyses  
+- Everyone who reviewed the codebase, filed issues, or submitted pull requests to improve this project  
+
     """)
 
 
@@ -302,13 +347,22 @@ elif page == "Hidden Markov":
     3. Infer the most likely hidden state sequence (Viterbi Algorithm)
     """)
 
-    # Load timeseries data
-    df_ts = pd.read_csv("10066852034034-timeseries.csv")
+    # ✅ Load CSV
+    df = pd.read_csv("10066852034034-timeseries.csv")
 
+    # ✅ Check if CPUFrequency exists
+    if 'CPUFrequency' not in df.columns:
+        st.error("Column 'CPUFrequency' not found in dataset!")
+        st.stop()
+
+    # ✅ Step 1: Preview
     st.subheader("Step 1: Data Preview")
-    st.write(df_ts.head())
+    st.write(df[['ElapsedTime', 'CPUFrequency']].head())
 
-    # Discretization function
+    # ✅ Step 2: Normalize CPUFrequency (0–100 scale)
+    df['CPUFrequency_normalized'] = df['CPUFrequency'] / df['CPUFrequency'].max() * 100
+
+    # ✅ Discretize
     def discretize(util):
         if util < 30:
             return 0  # Idle
@@ -317,49 +371,40 @@ elif page == "Hidden Markov":
         else:
             return 2  # Busy
 
-    st.subheader("Step 2: Discretize CPUUtilization → Observed States")
-    df_ts['ObsState'] = df_ts['CPUUtilization'].apply(discretize)
-    st.write(df_ts[['CPUUtilization', 'ObsState']].head())
+    df['ObsState'] = df['CPUFrequency_normalized'].apply(discretize)
 
-    # Observed sequence
-    observations = df_ts['ObsState'].values.reshape(-1, 1)
+    st.subheader("Step 2: Discretized Observed States")
+    st.write(df[['ElapsedTime', 'CPUFrequency_normalized', 'ObsState']].head())
 
-    # Fit HMM
-    from hmmlearn import hmm
+    # ✅ Observed sequence
+    observations = df['ObsState'].values.reshape(-1, 1)
+
+    # ✅ Fit HMM
     n_components = 3
     model = hmm.MultinomialHMM(n_components=n_components, n_iter=100, random_state=42)
     model.fit(observations)
 
-    # Transition Matrix
+    # ✅ Transition Matrix
     st.subheader("Step 3: Transition Matrix (A)")
     transmat_df = pd.DataFrame(model.transmat_, columns=[f"State {i}" for i in range(n_components)])
     st.write(transmat_df)
 
+    # ✅ Emission Matrix
     st.subheader("Step 4: Emission Probabilities (B)")
+    emission_probs = model.emissionprob_
 
-    # Build full emission matrix for all possible symbols [0,1,2]
-    all_symbols = [0, 1, 2]
-    colnames = ["Idle", "Normal", "Busy"]
+    # Build emission dataframe → fill missing cols if fewer symbols
+    cols = ["Idle", "Normal", "Busy"]
+    if emission_probs.shape[1] < 3:
+        emiss_df = pd.DataFrame(0, index=[f"State {i}" for i in range(n_components)], columns=cols)
+        for i, symbol in enumerate(np.unique(df['ObsState'])):
+            emiss_df[cols[symbol]] = emission_probs[:, i]
+    else:
+        emiss_df = pd.DataFrame(emission_probs, index=[f"State {i}" for i in range(n_components)], columns=cols)
 
-    # Create DataFrame with correct columns → initialize 0
-    emiss_df_full = pd.DataFrame(0, index=[f"State {i}" for i in range(model.n_components)],
-                                columns=colnames)
+    st.write(emiss_df)
 
-    # Determine symbols learned by model
-    n_symbols = model.emissionprob_.shape[1]
-    actual_cols = sorted(np.unique(df_ts['ObsState']))[:n_symbols]
-
-    # Map emissionprob_ values into correct columns
-    for idx, symbol in enumerate(actual_cols):
-        if symbol in all_symbols:
-            colname = colnames[symbol]
-            emiss_df_full[colname] = model.emissionprob_[:, idx]
-
-    st.write(emiss_df_full)
-
-
-
-    # Steady-state probabilities
+    # ✅ Steady-State Probabilities
     st.subheader("Step 5: Steady-State Probabilities")
     eigvals, eigvecs = np.linalg.eig(model.transmat_.T)
     steady_state = np.real(eigvecs[:, np.isclose(eigvals, 1)])
@@ -367,27 +412,28 @@ elif page == "Hidden Markov":
     steady_df = pd.DataFrame(steady_state, index=[f"State {i}" for i in range(n_components)], columns=["Probability"])
     st.write(steady_df)
 
-    # Forward Algorithm
+    # ✅ Forward Algorithm
     st.subheader("Step 6: Forward Algorithm")
     log_prob = model.score(observations)
     st.write(f"Log Probability of observation sequence: {log_prob:.4f}")
     st.write(f"Probability of observation sequence: {np.exp(log_prob):.6f}")
 
-    # Viterbi Algorithm
+    # ✅ Viterbi Algorithm
     st.subheader("Step 7: Viterbi Algorithm (Most Likely Hidden States)")
     hidden_states = model.predict(observations)
-    df_ts['HiddenState'] = hidden_states
-    st.write(df_ts[['CPUUtilization', 'ObsState', 'HiddenState']].head())
+    df['HiddenState'] = hidden_states
+    st.write(df[['ElapsedTime', 'CPUFrequency_normalized', 'ObsState', 'HiddenState']].head())
 
-    # Plot
-    import matplotlib.pyplot as plt
+    # ✅ Plot
     fig, ax = plt.subplots(figsize=(12, 4))
-    ax.plot(df_ts['ElapsedTime'], df_ts['CPUUtilization'], label='CPUUtilization')
-    ax.scatter(df_ts['ElapsedTime'], df_ts['HiddenState']*10, c='r', label='HiddenState (scaled)')
-    ax.set_xlabel("Elapsed Time")
-    ax.set_ylabel("CPU Utilization / Hidden State")
+    ax.plot(df['ElapsedTime'], df['CPUFrequency'], label='CPUFrequency')
+    ax.scatter(df['ElapsedTime'], df['HiddenState'] * df['CPUFrequency'].max() / 2, color='red', label='Hidden State (scaled)')
+    ax.set_xlabel("ElapsedTime")
+    ax.set_ylabel("CPUFrequency / HiddenState")
     ax.legend()
     st.pyplot(fig)
+
+
 
 elif page == "Queueing":
     st.title("Queueing Theory – Coming Soon")
