@@ -353,7 +353,7 @@ elif page == "Hidden Markov":
     """)
 
     # ✅ Load CSV
-    df = pd.read_csv("10066852034034-timeseries.csv")
+    df = pd.read_csv("timeseries.csv")
 
     # ✅ Check if CPUFrequency exists
     if 'CPUFrequency' not in df.columns:
