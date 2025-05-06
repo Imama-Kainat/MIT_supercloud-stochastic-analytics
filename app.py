@@ -6,6 +6,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import plotly.graph_objects as go
 from hmmlearn import hmm
+import plotly.express as px
+from scipy.stats import kstest, expon
+import io
 
 # ──────────────────────────────────────────────────────────────────────────
 # 1  Load cleaned data
@@ -20,7 +23,9 @@ df = load_data()
 # 2  Sidebar navigation
 # ──────────────────────────────────────────────────────────────────────────
 page = st.sidebar.radio("Navigation", ["Home", "Markov", "Hidden Markov", "Queueing"])
-
+st.sidebar.markdown("""
+[📂 View Source Code on GitHub](https://github.com/ZainabEman/MIT_supercloud-stochastic-analytics.git)
+""")
 # ──────────────────────────────────────────────────────────────────────────
 # 3  Home tab
 # ──────────────────────────────────────────────────────────────────────────
@@ -84,7 +89,7 @@ We analysed a **representative GPU sample** to keep local storage humane.
 ### 🚀 Quick‑Start
 
 ```bash
-git clone https://github.com/yourusername/stocastiq.git
+git clone https://github.com/ZainabEman/MIT_supercloud-stochastic-analytics.git
 cd stocastiq
 pip install -r requirements.txt
 streamlit run app.py         # loads a bundled sample file
@@ -362,11 +367,14 @@ elif page == "Hidden Markov":
     # ✅ Step 2: Normalize CPUFrequency (0–100 scale)
     df['CPUFrequency_normalized'] = df['CPUFrequency'] / df['CPUFrequency'].max() * 100
 
-    # ✅ Discretize
+    # ✅ Dynamic thresholds
+    q1 = df['CPUFrequency_normalized'].quantile(0.33)
+    q2 = df['CPUFrequency_normalized'].quantile(0.66)
+
     def discretize(util):
-        if util < 30:
+        if util < q1:
             return 0  # Idle
-        elif util < 70:
+        elif util < q2:
             return 1  # Normal
         else:
             return 2  # Busy
@@ -376,10 +384,27 @@ elif page == "Hidden Markov":
     st.subheader("Step 2: Discretized Observed States")
     st.write(df[['ElapsedTime', 'CPUFrequency_normalized', 'ObsState']].head())
 
+    # ✅ Check unique observed states
+    unique_states = np.unique(df['ObsState'])
+    st.write(f"Unique Observed States: {unique_states}")
+
+    # ✅ Inject synthetic samples if only 1 unique state
+    if len(unique_states) < 2:
+        st.warning("Only one observed state detected → injecting synthetic samples for demonstration.")
+        df = pd.concat([df, pd.DataFrame({
+            'ElapsedTime': [-1, -2],
+            'CPUFrequency': [df['CPUFrequency'].max(), df['CPUFrequency'].min()],
+            'CPUFrequency_normalized': [99, 1],
+            'ObsState': [2, 0]
+        })], ignore_index=True)
+        unique_states = np.unique(df['ObsState'])
+        st.write(f"After injection → Unique Observed States: {unique_states}")
+
     # ✅ Observed sequence
     observations = df['ObsState'].values.reshape(-1, 1)
 
     # ✅ Fit HMM
+    from hmmlearn import hmm
     n_components = 3
     model = hmm.MultinomialHMM(n_components=n_components, n_iter=100, random_state=42)
     model.fit(observations)
@@ -393,14 +418,18 @@ elif page == "Hidden Markov":
     st.subheader("Step 4: Emission Probabilities (B)")
     emission_probs = model.emissionprob_
 
-    # Build emission dataframe → fill missing cols if fewer symbols
     cols = ["Idle", "Normal", "Busy"]
-    if emission_probs.shape[1] < 3:
-        emiss_df = pd.DataFrame(0, index=[f"State {i}" for i in range(n_components)], columns=cols)
-        for i, symbol in enumerate(np.unique(df['ObsState'])):
-            emiss_df[cols[symbol]] = emission_probs[:, i]
-    else:
-        emiss_df = pd.DataFrame(emission_probs, index=[f"State {i}" for i in range(n_components)], columns=cols)
+    emiss_df = pd.DataFrame(0, index=[f"State {i}" for i in range(n_components)], columns=cols)
+
+    symbols_present = np.unique(df['ObsState'])
+    model_symbols = emission_probs.shape[1]
+
+    for symbol in symbols_present:
+        if symbol >= model_symbols:
+            st.warning(f"Symbol {symbol} not learned by HMM → skipping assignment.")
+            continue
+        col_name = cols[symbol]
+        emiss_df[col_name] = emission_probs[:, np.where(np.unique(observations) == symbol)[0][0]]
 
     st.write(emiss_df)
 
@@ -425,15 +454,178 @@ elif page == "Hidden Markov":
     st.write(df[['ElapsedTime', 'CPUFrequency_normalized', 'ObsState', 'HiddenState']].head())
 
     # ✅ Plot
+    import matplotlib.pyplot as plt
     fig, ax = plt.subplots(figsize=(12, 4))
     ax.plot(df['ElapsedTime'], df['CPUFrequency'], label='CPUFrequency')
-    ax.scatter(df['ElapsedTime'], df['HiddenState'] * df['CPUFrequency'].max() / 2, color='red', label='Hidden State (scaled)')
+    ax.scatter(df['ElapsedTime'], df['HiddenState'] * df['CPUFrequency'].max() / 2,
+               color='red', label='Hidden State (scaled)')
     ax.set_xlabel("ElapsedTime")
     ax.set_ylabel("CPUFrequency / HiddenState")
     ax.legend()
     st.pyplot(fig)
 
+    # ✅ INTERPRETATION
+    st.subheader("Step 8: Interpretation of Results")
+    st.markdown("""
+    **📝 Interpretation Summary:**
+
+    - The **Transition Matrix (A)** shows the probabilities of moving between hidden states (State 0, State 1, State 2).
+      For example, a high value on `State 0 → State 0` means the system tends to stay idle.
+
+    - The **Emission Probabilities (B)** tell us how likely each hidden state emits an observed state (Idle, Normal, Busy).
+      For example, if `State 1` has a high probability for `Normal`, that state likely represents normal usage.
+
+    - The **Steady-State Probabilities** indicate the long-run percentage of time the system stays in each hidden state.
+      For example, a steady state of `State 2: 0.70` implies 70% of the time the CPU is busy.
+
+    - The **Log Probability** from the Forward Algorithm tells us how well the model explains the observed sequence:
+      higher values mean better fit.
+
+    - The **Viterbi Algorithm** outputs the most likely hidden state path for the data → useful for inferring the CPU's operational mode over time.
+
+    - The final plot overlays the original CPU frequency and predicted hidden state sequence over time → to visually compare how hidden states align with CPU activity.
+
+    ✅ **In simple terms: This analysis modeled how CPU usage fluctuates between hidden operational modes (idle, normal, busy) over time, and estimated how likely transitions and states are happening based on the data.**
+    """)
+
 
 
 elif page == "Queueing":
-    st.title("Queueing Theory – Coming Soon")
+    import streamlit as st
+    import pandas as pd
+    import numpy as np
+    import plotly.express as px
+    from scipy.stats import kstest, expon
+    import io
+
+    st.title("📊 M/M/1 Queuing Theory Dashboard (Synthetic Data Mode)")
+    st.caption("Dataset: synthetic exponential data → analysis in SECONDS")
+
+    # 🔹 Synthetic data generator
+    @st.cache_data
+    def generate_synthetic_data(size=1000, interarrival_mean=60, service_mean=45):
+        np.random.seed(42)
+        interarrival_times = np.random.exponential(scale=interarrival_mean, size=size)
+        service_times = np.random.exponential(scale=service_mean, size=size)
+        return pd.DataFrame({
+            'interarrival_time': interarrival_times,
+            'service_time': service_times
+        })
+
+    df = generate_synthetic_data()
+
+    st.dataframe(df.head())
+
+    # 🔹 Calculate λ and μ
+    lam = 1 / df['interarrival_time'].mean()
+    mu = 1 / df['service_time'].mean()
+
+    # 🔹 M/M/1 metrics function
+    def mm1_metrics(lam, mu, n=5, k=10):
+        rho = lam / mu
+        if rho >= 1:
+            return {"rho": rho}
+        L = rho / (1 - rho)
+        Lq = rho**2 / (1 - rho)
+        W = 1 / (mu - lam)
+        Wq = lam / (mu * (mu - lam))
+        P0 = 1 - rho
+        Pn = (1 - rho) * rho**n
+        Pgt_k = rho**(k + 1)
+        return dict(rho=rho, L=L, Lq=Lq, W=W, Wq=Wq, P0=P0, Pn=Pn, Pgt_k=Pgt_k)
+
+    metrics = mm1_metrics(lam, mu)
+
+    st.subheader("🔢 M/M/1 Metrics (in SECONDS)")
+
+    if metrics.get("rho", 2) >= 1:
+        st.error(f"⚠️ System unstable (ρ = {metrics['rho']:.3f} ≥ 1). Metrics invalid.")
+    else:
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("λ (arrival rate)", f"{lam:.3f} /sec")
+        c2.metric("μ (service rate)", f"{mu:.3f} /sec")
+        c3.metric("ρ (utilization)", f"{metrics['rho']:.3f}", delta="⚠️" if metrics['rho'] > 0.9 else None)
+        c4.metric("P₀ (idle prob)", f"{metrics['P0']:.3f}")
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("L (avg system)", f"{metrics['L']:.2f}")
+        c2.metric("Lq (avg queue)", f"{metrics['Lq']:.2f}")
+        c3.metric("W (time system)", f"{metrics['W']:.2f} sec")
+        c4.metric("Wq (wait time)", f"{metrics['Wq']:.2f} sec")
+
+        st.markdown(f"""
+        - **Pₙ (n=5 customers):** {metrics['Pn']:.4f}
+        - **P(N > 10 customers):** {metrics['Pgt_k']:.4f}
+        """)
+
+        st.subheader("🧠 Interpretation")
+        if metrics['rho'] > 0.9:
+            st.warning("⚠️ Utilization exceeds 90% → consider adding capacity.")
+        else:
+            st.success("✅ System stable with moderate utilization.")
+
+    # 🔹 KS p-value
+    def ks_pvalue(sample):
+        if len(sample) < 50:
+            return np.nan
+        mean = np.mean(sample)
+        return kstest(sample, expon(scale=mean).cdf).pvalue
+
+    pval_ia = ks_pvalue(df['interarrival_time'])
+    pval_sv = ks_pvalue(df['service_time'])
+
+    # 🔹 Plots
+    st.subheader("📈 Interarrival Time Distributions")
+
+    fig_ia_lin = px.histogram(df, x='interarrival_time', nbins=50,
+                                labels={"interarrival_time": "Interarrival time (sec)"},
+                                title=f"Interarrival time (linear scale)\nKS p = {pval_ia:.4f}")
+    st.plotly_chart(fig_ia_lin, use_container_width=True)
+
+    st.subheader("📈 Service Time Distributions")
+
+    fig_sv_lin = px.histogram(df, x='service_time', nbins=50,
+                                labels={"service_time": "Service time (sec)"},
+                                title=f"Service time (linear scale)\nKS p = {pval_sv:.4f}")
+    st.plotly_chart(fig_sv_lin, use_container_width=True)
+    # 🔹 KDE plots
+    st.subheader("📊 Kernel Density Estimations (KDE)")
+
+    fig_kde = px.line()
+    fig_kde.add_scatter(x=np.sort(df['interarrival_time']), 
+                        y=expon.pdf(np.sort(df['interarrival_time']), scale=df['interarrival_time'].mean()),
+                        mode='lines', name='Interarrival KDE')
+    fig_kde.add_scatter(x=np.sort(df['service_time']), 
+                        y=expon.pdf(np.sort(df['service_time']), scale=df['service_time'].mean()),
+                        mode='lines', name='Service KDE')
+    fig_kde.update_layout(title="Exponential fit (PDF overlaid)")
+    st.plotly_chart(fig_kde, use_container_width=True)
+
+    # 🔹 Boxplots
+    st.subheader("📦 Boxplots")
+
+    fig_box = px.box(df.melt(value_vars=['interarrival_time', 'service_time'], var_name='Type', value_name='Seconds'),
+                     x='Type', y='Seconds', log_y=True,
+                     title="Boxplot of interarrival vs service times (log Y)")
+    st.plotly_chart(fig_box, use_container_width=True)
+
+    # 🔹 Utilization-performance curve
+    if metrics.get("rho", 2) < 1:
+        st.subheader("📈 Utilization-Performance Curve")
+        util_range = np.linspace(0.05, 0.99, 100)
+        L_curve = util_range / (1 - util_range)
+        fig_curve = px.line(x=util_range, y=L_curve,
+                            labels={"x": "ρ", "y": "L"},
+                            title="Avg number in system vs utilization (M/M/1)")
+        fig_curve.add_vline(x=metrics["rho"], line_dash="dash", annotation_text="current ρ")
+        st.plotly_chart(fig_curve, use_container_width=True)
+
+    # 🔹 Export
+    if st.button("📥 Export Metrics as CSV"):
+        if metrics.get("rho", 2) >= 1:
+            st.error("⚠️ Cannot export – system unstable.")
+        else:
+            csv_buf = io.StringIO()
+            pd.DataFrame([metrics]).to_csv(csv_buf, index=False)
+            st.download_button("Download CSV", csv_buf.getvalue(),
+                               file_name="mm1_metrics.csv", mime="text/csv")

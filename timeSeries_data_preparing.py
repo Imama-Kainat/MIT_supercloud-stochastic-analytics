@@ -2,61 +2,81 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-# ✅ Load original dataset
-df = pd.read_csv("10066852034034-timeseries.csv")
+# ---------------------------
+# ✅ STEP 1: Load Original Data
+# ---------------------------
+input_file = "10066852034034-timeseries.csv"
 
-# ✅ Pick a CPU-related column
-cpu_col_candidates = [col for col in df.columns if 'CPU' in col or 'Frequency' in col]
-if len(cpu_col_candidates) == 0:
-    raise ValueError("No CPU utilization/frequency column found in dataset!")
+try:
+    df = pd.read_csv(input_file)
+except FileNotFoundError:
+    print(f"❌ ERROR: File {input_file} not found!")
+    exit()
 
-cpu_col = cpu_col_candidates[0]
-print(f"Using column: {cpu_col}")
+print(f"✅ Loaded dataset with {len(df)} rows")
 
-# ✅ Create a working copy
-df['CPU_original'] = df[cpu_col]
+# ---------------------------
+# ✅ STEP 2: Ensure ElapsedTime exists
+# ---------------------------
+if 'ElapsedTime' not in df.columns:
+    print("⚠️ 'ElapsedTime' column not found → generating synthetic index")
+    df['ElapsedTime'] = np.arange(len(df))
 
-# ✅ Step 1: Normalize original values
-max_val = df[cpu_col].max()
-min_val = df[cpu_col].min()
-if max_val == min_val:
-    # original data has no variation → generate synthetic pattern
-    df['CPU_norm'] = np.random.uniform(0, 100, size=len(df))
-    print("⚠️ Original data constant → generated random values")
-else:
-    df['CPU_norm'] = (df[cpu_col] - min_val) / (max_val - min_val) * 100
+# ---------------------------
+# ✅ STEP 3: Generate Synthetic CPU Frequency
+# ---------------------------
+total_rows = len(df)
 
-# ✅ Step 2: Inject synthetic spikes for realism
-np.random.seed(42)
-spike_indices = np.random.choice(len(df), size=int(len(df)*0.05), replace=False)  # 5% random spikes
-df.loc[spike_indices, 'CPU_norm'] += np.random.uniform(20, 60, size=len(spike_indices))
+# Distribution: 30% idle, 40% normal, 30% busy
+idle_size = int(total_rows * 0.3)
+normal_size = int(total_rows * 0.4)
+busy_size = total_rows - idle_size - normal_size
 
-# ✅ Clip between 0-100
-df['CPU_norm'] = df['CPU_norm'].clip(0, 100)
+# Generate values
+idle_vals = np.random.normal(10, 3, idle_size)    # mean=10, std=3
+normal_vals = np.random.normal(50, 10, normal_size) # mean=50, std=10
+busy_vals = np.random.normal(90, 5, busy_size)     # mean=90, std=5
 
-# ✅ Step 3: Discretize
-def discretize(util):
-    if util < 30:
-        return 0  # Idle
-    elif util < 70:
-        return 1  # Normal
+# Concatenate all
+cpu_values = np.concatenate([idle_vals, normal_vals, busy_vals])
+cpu_values = np.clip(cpu_values, 0, 100)  # ensure [0,100]
+np.random.shuffle(cpu_values)  # shuffle to mix states
+
+# Assign to dataframe
+df['CPUFrequency'] = cpu_values
+
+# ---------------------------
+# ✅ STEP 4: Normalize 0-100
+# ---------------------------
+df['CPU_norm'] = (df['CPUFrequency'] - df['CPUFrequency'].min()) / (df['CPUFrequency'].max() - df['CPUFrequency'].min()) * 100
+df['CPU_norm'] = df['CPU_norm'].round(2)
+
+# ---------------------------
+# ✅ STEP 5: Discretize into Observed States
+# ---------------------------
+def discretize(val):
+    if val < 30:
+        return 0  # idle
+    elif val < 70:
+        return 1  # normal
     else:
-        return 2  # Busy
+        return 2  # busy
 
 df['ObsState'] = df['CPU_norm'].apply(discretize)
 
-# ✅ Summary
-print(df[['ElapsedTime', cpu_col, 'CPU_norm', 'ObsState']].head())
+# ---------------------------
+# ✅ STEP 6: Preview
+# ---------------------------
+print("\n✅ First rows of preprocessed data:")
+print(df[['ElapsedTime', 'CPUFrequency', 'CPU_norm', 'ObsState']].head())
 
-# ✅ Optional: plot
-plt.figure(figsize=(14,5))
-plt.plot(df['ElapsedTime'], df['CPU_norm'], label="CPU_norm")
-plt.scatter(df['ElapsedTime'], df['ObsState']*10, c='red', label="ObsState (scaled)")
-plt.xlabel("ElapsedTime")
-plt.ylabel("CPU (%) / State")
-plt.legend()
-plt.show()
+print("\n✅ Class distribution:")
+print(df['ObsState'].value_counts())
 
-# ✅ Export enriched data
-df[['ElapsedTime', 'CPU_norm', 'ObsState']].to_csv("preprocessed_timeseries.csv", index=False)
-print("✅ Preprocessed data saved to preprocessed_timeseries.csv")
+# ---------------------------
+# ✅ STEP 7: Save to CSV
+# ---------------------------
+output_file = "preprocessed_timeseries.csv"
+df.to_csv(output_file, index=False)
+print(f"\n✅ Saved preprocessed data → {output_file}")
+
