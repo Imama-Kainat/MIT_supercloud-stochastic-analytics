@@ -1,94 +1,172 @@
-# StocastiQ: Stochastic Process Modeling of Datacenter GPU Resource Utilization
 
-## 📚 Project Overview
 
-This project presents an interactive Streamlit dashboard applying **Markov Chains**, **Hidden Markov Models (HMM)**, and **Queueing Theory** to analyze GPU resource utilization and job state transitions in a high-performance computing environment.
+# 🎲 StocastiQ: Stochastic Process Modeling of Datacenter GPU Resource Utilization
 
-We used a curated subset from the **MIT SuperCloud Datacenter Challenge dataset (over 2TB of SLURM job logs)** to explore patterns of resource allocation, job lifecycle, and system load in a real datacenter. Our goal was to model job behaviors, hidden system states, and queueing performance through stochastic process techniques.
+<p align="center">
+  <img src="assets/logo.png" alt="StocastiQ Logo" width="400"/>
+</p>
+
+
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Python](https://img.shields.io/badge/python-3.9%2B-brightgreen.svg)
+![Streamlit](https://img.shields.io/badge/streamlit-dashboard-red.svg)
+
+---
+
+## 📚 Overview
+
+**StocastiQ** is an **interactive Streamlit dashboard** that applies **stochastic process techniques** — **Markov Chains**, **Hidden Markov Models (HMMs)**, and **Queueing Theory** — to analyze **GPU resource utilization** and **job state transitions** in a datacenter environment.
+
+We leverage a curated sample from the **MIT SuperCloud Datacenter Challenge dataset** (\~2 TB of SLURM job logs) to uncover patterns of GPU job lifecycles, hidden states of system load, and queueing performance.
+
+This project demonstrates how **stochastic modeling** can provide insights into **HPC (High-Performance Computing)** environments, resource bottlenecks, and scheduling dynamics.
 
 ---
 
 ## 📂 Dataset
 
-We accessed the publicly hosted **MIT SuperCloud Datacenter Challenge dataset** via AWS S3 using:
+We used the **MIT SuperCloud Datacenter Challenge** dataset, publicly hosted on AWS S3.
+
+Example of accessing raw data:
 
 ```bash
 aws s3 ls s3://datacenter-challenge/202201/ --no-sign-request
 ```
-# Dataset Structure
 
-Inside the dataset we identified:
+### Structure
 
-- **Two main folders:** `cpu/` and `gpu/`  
-- **Nested sub‑folders:** `0000/` to `0099/` per resource  
-- **Paired files for each job:** `*-summary.csv` and `*-timeseries.csv`  
+* `cpu/` and `gpu/` folders
+* Sub-folders `0000/` → `0099/` for partitioned job data
+* Each job includes:
 
-> **Note:** Because the full dataset is ~**2 TB**, we extracted a representative sample of GPU *timeseries* and *summary* files for analysis.
+  * `*-summary.csv` → metadata (submit/start/end, state, resources requested)
+  * `*-timeseries.csv` → utilization metrics sampled during runtime
 
-## Key Features Extracted
+Since the full dataset is \~**2 TB**, we **extracted GPU subsets** for tractable analysis.
 
-| Category | Columns |
-|----------|---------|
-| **Resource metrics** | `CPUUtilization`, `RSS`, `VMSize`, `IORead`, `IOWrite`, `Threads`, `ElapsedTime` |
-| **SLURM job metadata** | `time_submit`, `time_start`, `time_end`, `state`, `cpus_req`, `mem_req`, `partition` |
+### Key Features Extracted
 
----
-
-# 🏗️ Challenges & Solutions
-
-| Challenge | Our Approach |
-|-----------|--------------|
-| **Dataset size** | Navigating 2 TB on AWS S3 was non‑trivial. We used the AWS CLI with the `--no-sign-request` flag and **selectively downloaded** only the relevant GPU sub‑folders for local processing. |
-| **Data understanding** | The dataset lacked documentation for state definitions. We combined SLURM state logs with timeseries metrics to **infer discrete states** suitable for modelling. |
-| **State representation** | We debated using raw SLURM states vs. derived thresholds. We settled on **discretising `CPUUtilization`** into three states:<br>0 = *Idle* (`< 30 %`)<br>1 = *Normal* (`30 – 70 %`)<br>2 = *Busy* (`≥ 70 %`) |
-| **Model constraints** | Some subsets lacked certain symbols (e.g., only *Idle*). We built **emission matrices** that gracefully handle missing symbols. |
-| **Interpreting results** | We **iteratively validated** transition matrices, emission probabilities and steady‑state distributions against domain expectations. |
+| Category             | Columns                                                                              |
+| -------------------- | ------------------------------------------------------------------------------------ |
+| **Resource metrics** | `CPUUtilization`, `RSS`, `VMSize`, `IORead`, `IOWrite`, `Threads`, `ElapsedTime`     |
+| **Job metadata**     | `time_submit`, `time_start`, `time_end`, `state`, `cpus_req`, `mem_req`, `partition` |
 
 ---
 
-# 💻 Dashboard Features
+## ⚡ Challenges & Solutions
 
-| Module | Key Functionality |
-|--------|-------------------|
-| **Home** | Narrative of dataset journey, challenges & system overview |
-| **Markov Chain Analysis** | State transition matrix, steady‑state distribution, visualisation |
-| **Hidden Markov Model** | Emission matrix, steady‑state, forward & Viterbi algorithms, plots |
-| **Queueing Theory** | Arrival/service rates, average wait time, queue simulation |
-
-Each tab provides both **quantitative outputs** (tables, probabilities) and **visual insights** (Matplotlib charts).
+| Challenge                     | Our Approach                                                                                         |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------- |
+| **Data size (\~2 TB)**        | Used **AWS CLI** with `--no-sign-request` and **sampled GPU jobs** locally                           |
+| **Lack of state definitions** | Cross-referenced SLURM docs with timeseries to infer states                                          |
+| **State representation**      | Discretized `CPUUtilization` into:<br>0 = Idle (< 30 %)<br>1 = Normal (30–70 %)<br>2 = Busy (≥ 70 %) |
+| **Sparse state coverage**     | Built emission matrices tolerant to missing symbols                                                  |
+| **Result validation**         | Iteratively compared against **domain expectations** (steady-state, emissions, queueing outcomes)    |
 
 ---
 
-# 🚀 How to Run
+## 💻 Dashboard Modules
+
+The **Streamlit app** is divided into four modules:
+
+| Module                    | Features                                                                   |
+| ------------------------- | -------------------------------------------------------------------------- |
+| **Home**                  | Narrative walkthrough of dataset, challenges, and approach                 |
+| **Markov Chain Analysis** | Transition matrix, steady-state distribution, state visualizations         |
+| **Hidden Markov Model**   | Emission probabilities, forward/Viterbi algorithms, hidden state inference |
+| **Queueing Theory**       | Arrival/service rates, expected wait time, queue simulations               |
+| **Visualizations**        | Matplotlib charts for distributions, transitions, and queues               |
+
+---
+
+## 🚀 Getting Started
+
+### 1️⃣ Clone Repository
 
 ```bash
-# 1. Clone the repository
 git clone https://github.com/yourusername/stocastiq.git
 cd stocastiq
 ```
-## 📝 Dependencies
 
-- **streamlit**
-- **numpy**
-- **pandas**
-- **hmmlearn**
-- **matplotlib**
+### 2️⃣ Install Dependencies
 
-*Optional*: **AWS CLI** (for dataset fetching)
+```bash
+pip install -r requirements.txt
+```
+
+Or manually:
 
 ```bash
 pip install streamlit numpy pandas hmmlearn matplotlib
 ```
-# 2. Install dependencies
+
+*(Optional)*: Install **AWS CLI** for dataset access:
+
+```bash
+sudo apt-get install awscli
 ```
-pip install -r requirements.txt
-```
-# 3. Launch the Streamlit app
-```
+
+### 3️⃣ Run the App
+
+```bash
 streamlit run app.py
 ```
+
+---
+
+## 📊 Example Outputs
+
+* **Transition Matrix**: Probability of job moving Idle → Normal → Busy
+* **Steady-State Distribution**: Long-term probability of system load states
+* **HMM Emissions**: Hidden system behavior from observable metrics
+* **Queue Simulations**: Expected wait times under varying loads
+
+---
+
+## 📁 Repository Structure
+
+```
+stocastiq/
+│── app.py                  # Streamlit dashboard
+│── requirements.txt        # Python dependencies
+│── data/                   # Sample extracted GPU job logs
+│── modules/
+│    ├── markov_chain.py    # Markov Chain analysis
+│    ├── hmm_model.py       # Hidden Markov Model analysis
+│    ├── queueing.py        # Queueing simulations
+│    └── utils.py           # Helpers (data loading, preprocessing)
+│── README.md               # Project documentation
+```
+
+---
+
 ## 🎓 Acknowledgments
 
-- **MIT SuperCloud Datacenter Challenge** team for releasing the dataset  
-- **SLURM scheduler documentation** for mapping job‑state codes  
-- Open‑source contributors to **hmmlearn**, **streamlit**, and **matplotlib**
+* **MIT SuperCloud Datacenter Challenge** for open dataset access
+* **SLURM scheduler documentation** for state mappings
+* Developers of **hmmlearn**, **streamlit**, and **matplotlib**
+
+---
+
+## 📜 License
+
+This project is licensed under the **MIT License** — free to use, modify, and distribute with attribution.
+
+---
+
+## 🙌 Contributing
+
+Contributions are welcome!
+
+1. Fork the repo
+2. Create your feature branch: `git checkout -b feature/awesome-feature`
+3. Commit your changes: `git commit -m 'Add awesome feature'`
+4. Push to branch: `git push origin feature/awesome-feature`
+5. Open a Pull Request
+
+---
+
+✨ *StocastiQ brings stochastic process modeling to the heart of datacenter GPU workloads — uncovering hidden states, long-term behaviors, and queue dynamics in HPC environments.*
+
+---
+
