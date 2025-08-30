@@ -15,7 +15,7 @@
 
 ## 📚 Overview
 
-**StocastiQ**  [📺 Demo Video](Assets/DEMO_VIDEO.mp4)
+**StocastiQ**  [📺 Demo Video](https://drive.google.com/file/d/1rCXnvy3TBr-XJkxC5jC15leyWpkK0w2W/view?usp=sharing)
 )is an **interactive Streamlit dashboard** that applies **stochastic process techniques** — **Markov Chains**, **Hidden Markov Models (HMMs)**, and **Queueing Theory** — to analyze **GPU resource utilization** and **job state transitions** in a datacenter environment.
 
 We leverage a curated sample from the **MIT SuperCloud Datacenter Challenge dataset** (\~2 TB of SLURM job logs) to uncover patterns of GPU job lifecycles, hidden states of system load, and queueing performance.
