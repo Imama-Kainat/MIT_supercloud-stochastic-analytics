@@ -3,7 +3,7 @@
 # 🎲 StocastiQ: Stochastic Process Modeling of Datacenter GPU Resource Utilization
 
 <p align="center">
-  <img src="assets/logo.png" alt="StocastiQ Logo" width="400"/>
+  <img src="Assets/logo.png.png" alt="StocastiQ Logo" width="400"/>
 </p>
 
 
